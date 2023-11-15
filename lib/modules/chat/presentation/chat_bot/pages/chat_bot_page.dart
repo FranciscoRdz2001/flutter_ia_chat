@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_ia_chat/core/app/utils/screen_size_util.dart';
 import 'package:flutter_ia_chat/core/app/utils/styles_util.dart';
-import 'package:flutter_ia_chat/modules/chat/data/mock/mock_data.dart';
-import 'package:flutter_ia_chat/modules/chat/presentation/widgets/border_icon_widget.dart';
-import 'package:flutter_ia_chat/modules/chat/presentation/widgets/message_widget.dart';
+import 'package:flutter_ia_chat/modules/chat/data/models/message_data_model.dart';
+import 'package:flutter_ia_chat/modules/chat/presentation/chat_bot/widgets/border_icon_widget.dart';
+import 'package:flutter_ia_chat/modules/chat/presentation/chat_bot/widgets/message_widget.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/chat_bot_provider.dart';
 
 class ChatBotPage extends StatefulWidget {
   const ChatBotPage({super.key});
@@ -13,22 +16,12 @@ class ChatBotPage extends StatefulWidget {
 }
 
 class _ChatBotPageState extends State<ChatBotPage> {
-  final MockData _data = MockData();
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      _data.onRefreshData = () {
-        setState(() {});
-      };
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final bot = Provider.of<ChatBotProvider>(context);
     final screen = ScreenSizeUtil.of(context);
     return Theme(
       data: Theme.of(context).copyWith(
@@ -47,11 +40,11 @@ class _ChatBotPageState extends State<ChatBotPage> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _data.isLoading ? Colors.grey[50] : Colors.white,
+                      color: bot.isLoading ? Colors.grey[50] : Colors.white,
                       borderRadius: const BorderRadius.all(Radius.circular(16)),
                     ),
                     child: TextField(
-                      enabled: !_data.isLoading,
+                      enabled: !bot.isLoading,
                       controller: _inputController,
                       textAlign: TextAlign.left,
                       decoration: InputDecoration(
@@ -76,7 +69,7 @@ class _ChatBotPageState extends State<ChatBotPage> {
                         ),
                       ),
                       onSubmitted: (value) {
-                        _data.addMessage(value);
+                        bot.getMessage(value);
                         _inputController.clear();
                         setState(() {});
                         _scrollController.animateTo(
@@ -93,7 +86,7 @@ class _ChatBotPageState extends State<ChatBotPage> {
                 InkWell(
                   onTap: () {
                     if (_inputController.text.isEmpty) return;
-                    _data.addMessage(_inputController.text);
+                    bot.getMessage(_inputController.text);
                     _inputController.clear();
                     setState(() {});
                   },
@@ -118,28 +111,14 @@ class _ChatBotPageState extends State<ChatBotPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  const BorderIconWidget(
-                    icon: Icons.arrow_back,
-                  ),
-                  SizedBox(width: screen.wp(0.05)),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.blue[50],
-                    ),
-                    child: Icon(
-                      Icons.person,
-                      color: Colors.blue[500],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+                  const _BotImage(size: 32),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'FitBot',
+                          'Partner Medical',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: StylesUtil.w700(14, Colors.grey[800]),
@@ -169,10 +148,6 @@ class _ChatBotPageState extends State<ChatBotPage> {
                       ],
                     ),
                   ),
-                  SizedBox(width: screen.wp(0.05)),
-                  const BorderIconWidget(
-                    icon: Icons.more_horiz,
-                  ),
                 ],
               ),
             ),
@@ -188,10 +163,10 @@ class _ChatBotPageState extends State<ChatBotPage> {
                 children: [
                   const SizedBox(height: 16),
                   ...List.generate(
-                    _data.messages.length,
+                    bot.messages.length,
                     (x) {
-                      final msg = _data.messages[x];
-                      final isUserMessage = (x % 2) == 0;
+                      final msg = bot.messages[x];
+                      final isUserMessage = msg.type == MessageType.user;
                       final color =
                           !isUserMessage ? Colors.grey[100] : Colors.blue[50];
                       return Padding(
@@ -205,19 +180,14 @@ class _ChatBotPageState extends State<ChatBotPage> {
                               : MainAxisAlignment.start,
                           children: [
                             if (!isUserMessage) ...[
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: BorderIconWidget(
-                                  icon: Icons.person,
-                                  iconColor: Colors.blue,
-                                  backgroundColor: Colors.blue[50],
-                                  hideBorder: true,
-                                ),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 8),
+                                child: _BotImage(size: 24),
                               ),
                               const SizedBox(width: 8),
                             ],
                             MessageWidget(
-                              msg: msg,
+                              msg: msg.message,
                               backgroundColor: color!,
                             ),
                           ],
@@ -225,17 +195,12 @@ class _ChatBotPageState extends State<ChatBotPage> {
                       );
                     },
                   ),
-                  if (_data.isLoading) ...[
-                    Row(
+                  if (bot.isLoading) ...[
+                    const Row(
                       children: [
-                        BorderIconWidget(
-                          icon: Icons.person,
-                          iconColor: Colors.blue,
-                          backgroundColor: Colors.blue[50],
-                          hideBorder: true,
-                        ),
-                        const SizedBox(width: 16),
-                        const SizedBox(
+                        _BotImage(size: 24),
+                        SizedBox(width: 16),
+                        SizedBox(
                           height: 16,
                           width: 16,
                           child: CircularProgressIndicator(
@@ -250,6 +215,23 @@ class _ChatBotPageState extends State<ChatBotPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BotImage extends StatelessWidget {
+  final double size;
+  const _BotImage({Key? key, required this.size}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: Image.asset(
+        'assets/images/bot_image.png',
+        fit: BoxFit.fitHeight,
+        height: size,
+        width: size,
       ),
     );
   }
